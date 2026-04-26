@@ -57,7 +57,11 @@ def fine_tune(model, tokenizer, dataset):
     model = prepare_model(model)
 
     dataset = dataset.map(format_example)
-    tokenized = dataset.map(tokenize, batched=True)
+    tokenized = dataset.map(
+        tokenize,
+        batched=True,
+        fn_kwargs={"tokenizer": tokenizer}
+    )
 
     trainer = get_trainer(model, tokenized)
     trainer.train()

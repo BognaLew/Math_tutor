@@ -1,49 +1,74 @@
 from transformers import Trainer, TrainingArguments
 from peft import get_peft_model, LoraConfig
 
-def format_example(example):
-    return {
-        "text": f"""### Instruction:
-Solve the math problem step by step.
+from utils.inference import build_prompt
 
-### Question:
-{example['question']}
 
-### Answer:
-{example['answer']}"""
-    }
+def tokenize(examples, tokenizer):
+    prompts = [build_prompt(q) for q in examples['question']]
+    full_texts = [prompt + answer 
+                              for prompt, answer in 
+                              zip(prompts, examples['answer'])]
 
-def tokenize(example, tokenizer):
     tokens = tokenizer(
-        example["text"],
+        full_texts,
         truncation=True,
         max_length=256,
-        padding=True
+        padding='max_length'
     )
-    tokens["labels"] = tokens["input_ids"].copy()
+
+    prompt_tokens = tokenizer(
+        prompts,
+        truncation=True,
+        max_length=256,
+    )
+
+    labels = []
+    for i in range(len(full_texts)):
+        input_ids = tokens["input_ids"][i]
+        label = input_ids.copy()
+
+        prompt_len = sum(
+            1 for t in prompt_tokens["input_ids"][i]
+            if t != tokenizer.pad_token_id
+        )
+
+        label[:prompt_len] = [-100] * prompt_len
+        labels.append(label)
+
+    tokens["labels"] = labels
     return tokens
 
 def prepare_model(model):
     lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        target_modules=["q_proj", "v_proj"],
+        r=64,
+        lora_alpha=128,
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "up_proj",
+            "down_proj",
+            "gate_proj"
+            ],
         lora_dropout=0.05,
         bias="none",
-        task_type="CAUSAL_LM"
+        task_type="CAUSAL_LM",
     )
     return get_peft_model(model, lora_config)
 
 def get_trainer(model, dataset):
     training_args = TrainingArguments(
-        output_dir="./qwen-gsm8k-lora",
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=8,
-        learning_rate=2e-4,
-        num_train_epochs=3,
-        fp16=True,
-        logging_steps=10,
-        save_steps=500,
+        output_dir="./qwen-gsm8k-lora", 
+        per_device_train_batch_size=4, 
+        gradient_accumulation_steps=4, 
+        learning_rate=2e-4, 
+        num_train_epochs=3, 
+        warmup_steps=.05,
+        fp16=True, 
+        logging_steps=10, 
+        save_steps=500, 
         optim="paged_adamw_8bit"
     )
 
@@ -56,7 +81,6 @@ def get_trainer(model, dataset):
 def fine_tune(model, tokenizer, dataset):
     model = prepare_model(model)
 
-    dataset = dataset.map(format_example)
     tokenized = dataset.map(
         tokenize,
         batched=True,

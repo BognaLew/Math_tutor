@@ -1,12 +1,12 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from constants import cache_dir, model_name
+from constants import model_name
 
 
 def get_tokenizer():
   print("downloading tokenizer")
-  return AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
+  return AutoTokenizer.from_pretrained(model_name)
 
 def get_model():
   config = BitsAndBytesConfig(
@@ -21,5 +21,4 @@ def get_model():
       device_map='auto',
       quantization_config=config,
       torch_dtype=torch.float16,
-      cache_dir=cache_dir,
   )

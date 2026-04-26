@@ -1,5 +1,5 @@
 import re
-
+from tqdm import tqdm
 
 def extract_answer(text):
     patterns = [
@@ -43,3 +43,18 @@ def generate_answer(question, model, tokenizer):
 
     decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return decoded
+
+def run(model, tokenizer, dataset):
+    results = []
+    correct = 0
+
+    for sample in tqdm(dataset):
+        pred = generate_answer(sample["question"], model, tokenizer)
+        pred_ans = extract_answer(pred)
+        true_ans = extract_answer(sample["answer"])
+
+        if pred_ans == true_ans:
+            correct += 1
+        results.append(pred)
+    baseline_acc = correct / len(dataset)
+    return results, baseline_acc
